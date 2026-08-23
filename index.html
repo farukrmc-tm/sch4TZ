@@ -1,219 +1,308 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="tr" class="h-full bg-slate-900 text-slate-100">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WortSchatz Pro - TestDaF Kelime Platformu</title>
-  <link rel="stylesheet" href="style.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-</head>
-<body>
-
-  <div class="app-layout">
+  <title>Kelime Kutusu Pro — TestDaF</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
     
-    <!-- ÜST BAR / HEADER -->
-    <header class="top-nav">
-      <div class="brand">
-        <div class="brand-icon">⚡</div>
-        <div>
-          <h1>WortSchatz <span>PRO</span></h1>
-          <p class="brand-sub">TestDaF Akademik Kelime Havuzu</p>
-        </div>
-      </div>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
 
-      <div class="nav-controls">
-        <button class="nav-tab active" data-view="selectView">📋 Kelime Seçimi</button>
-        <button class="nav-tab" data-view="cardView" id="navCardBtn" disabled>🗂️ Kartlar</button>
-        <button class="nav-tab" data-view="matchView" id="navMatchBtn" disabled>⚡ Eşleştirme</button>
-        <button class="nav-tab" data-view="quizView" id="navQuizBtn" disabled>🧠 Test</button>
-      </div>
+    /* 3D Flashcard */
+    .perspective-1000 { perspective: 1000px; }
+    .transform-style-3d { transform-style: preserve-3d; }
+    .backface-hidden { backface-visibility: hidden; }
+    .rotate-y-180 { transform: rotateY(180deg); }
 
-      <div class="header-stats">
-        <button class="btn-starred-filter" id="filterStarredOnlyBtn">
-          ⭐ Yıldızlılar (<span id="totalStarredCount">0</span>)
-        </button>
-      </div>
-    </header>
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
 
-    <!-- 1. EKRAN: MODÜL & KELİME SEÇİM PANELİ -->
-    <main class="view-panel active" id="selectView">
-      <div class="selection-grid">
-        
-        <!-- Sol Kolon: Modül & Kategori Listesi -->
-        <aside class="module-sidebar">
-          <div class="sidebar-header">
-            <h3>📂 Modüller</h3>
-          </div>
-          <div class="module-list" id="moduleList">
-            <!-- JS ile doldurulacak (1.1, 1.2, 4.3 vb.) -->
-          </div>
-        </aside>
+    /* Eşleştirme Titreme Efekti */
+    @keyframes shake {
+      10%, 90% { transform: translateX(-2px); }
+      20%, 80% { transform: translateX(3px); }
+      30%, 50%, 70% { transform: translateX(-3px); }
+      40%, 60% { transform: translateX(3px); }
+    }
+    .shake { animation: shake 0.4s ease both; }
+  </style>
+</head>
+<body class="h-full flex flex-col md:flex-row overflow-x-hidden select-none">
 
-        <!-- Sağ Kolon: Kelime Listesi & Seçim Araçları -->
-        <section class="word-picker-area">
-          <div class="picker-toolbar">
-            <div class="toolbar-info">
-              <h2 id="currentModuleTitle">1.1 Schule und Bildung</h2>
-              <p><span id="selectedWordsCount">0</span> kelime seçildi</p>
-            </div>
-            
-            <div class="toolbar-actions">
-              <input type="text" id="searchWordInput" placeholder="Kelime ara (Almanca/Türkçe)..." class="search-input">
-              <button class="tool-btn" id="selectAllBtn">Tümünü Seç</button>
-              <button class="tool-btn" id="clearSelectionBtn">Temizle</button>
-              <button class="tool-btn" id="selectQuick5Btn">+5 Rastgele</button>
-              <button class="tool-btn" id="selectQuick10Btn">+10 Rastgele</button>
-            </div>
-          </div>
-
-          <!-- Kelime Tablosu / Izgarası -->
-          <div class="words-table-container">
-            <div class="words-list" id="wordsCheckList">
-              <!-- JS dinamik checkbox listesi -->
-            </div>
-          </div>
-
-          <!-- Alt Başlatma Çubuğu -->
-          <div class="start-bar">
-            <div class="start-info">
-              Seçilen <strong><span id="startSelectedCount">0</span></strong> kelime ile başla:
-            </div>
-            <div class="start-buttons">
-              <button class="btn-start btn-card" id="startCardsBtn" disabled>🗂️ Kartları Aç</button>
-              <button class="btn-start btn-match" id="startMatchBtn" disabled>⚡ Eşleştirmeyi Başlat</button>
-              <button class="btn-start btn-quiz" id="startQuizBtn" disabled>🧠 Teste Başla</button>
-            </div>
-          </div>
-        </section>
-
-      </div>
-    </main>
-
-    <!-- 2. EKRAN: FLASHCARD (KART ÇEVİRME & ARALIKLI TEKRAR) -->
-    <section class="view-panel" id="cardView">
-      <div class="session-header">
-        <button class="btn-back" data-back="selectView">⬅️ Seçime Dön</button>
-        <div class="session-progress">
-          <div class="progress-track"><div class="progress-bar" id="cardProgressBar"></div></div>
-          <span class="progress-counter" id="cardCounter">1 / 10</span>
-        </div>
-        <button class="btn-star-active" id="cardStarBtn">⭐</button>
-      </div>
-
-      <div class="card-stage">
-        <div class="card-3d-wrap" id="card3dWrap">
-          <div class="card-inner" id="cardInner">
-            
-            <!-- Ön Yüz -->
-            <div class="card-face front-face">
-              <span class="badge-type" id="frontType">Nomen</span>
-              <h2 class="main-term" id="frontTerm">die Ausbildung</h2>
-              <p class="prep-text" id="frontGrammar"></p>
-              <span class="hint-text">Çevirmek için tıkla veya [Boşluk] tuşuna bas</span>
-            </div>
-
-            <!-- Arka Yüz -->
-            <div class="card-face back-face">
-              <span class="badge-register" id="backRegister">Wissenschaftssprache</span>
-              <h3 class="meaning-tr" id="backMeaning">mesleki eğitim</h3>
-              
-              <div class="example-box">
-                <p class="ex-de" id="backExDe">Die Ausbildung dauert in der Regel drei Jahre.</p>
-                <p class="ex-tr" id="backExTr">Mesleki eğitim genellikle üç yıl sürer.</p>
-              </div>
-
-              <div class="tip-box" id="backTipBox" style="display:none;">
-                💡 <span id="backTip"></span>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      </div>
-
-      <div class="card-action-bar">
-        <button class="action-btn btn-again" id="btnCardAgain" title="Tekrar et (Kuyruğun sonuna atar)">
-          🔄 Tekrar Et <span>[1]</span>
-        </button>
-        <button class="action-btn btn-flip" id="btnCardFlip">
-          🔃 Çevir <span>[Boşluk]</span>
-        </button>
-        <button class="action-btn btn-known" id="btnCardKnown" title="Öğrendim (Tamamlandı sayar)">
-          ✅ Öğrendim <span>[2]</span>
-        </button>
-      </div>
-    </section>
-
-    <!-- 3. EKRAN: DUOLINGO EŞLEŞTİRME MODU -->
-    <section class="view-panel" id="matchView">
-      <div class="session-header">
-        <button class="btn-back" data-back="selectView">⬅️ Seçime Dön</button>
-        <div class="match-status">
-          <span>⚡ Eşleştirme Modu</span>
-          <span class="badge-round" id="matchPairsLeft">0 Çift Kaldı</span>
-        </div>
-        <button class="btn-refresh" id="btnResetMatch">🔄 Yeniden Karıştır</button>
-      </div>
-
-      <div class="match-stage">
-        <div class="match-grid" id="matchGrid">
-          <!-- JS dinamik eşleştirme butonları -->
-        </div>
-      </div>
-
-      <div class="match-finish-modal" id="matchFinishModal" style="display:none;">
-        <div class="modal-card">
-          <div class="modal-icon">🎉</div>
-          <h2>Tebrikler! Tüm Çiftler Eşleşti!</h2>
-          <p>Seçili kelimeleri başarıyla tamamladın.</p>
-          <div class="modal-btns">
-            <button class="btn-start btn-match" id="btnRestartMatch">Tekrar Oyna</button>
-            <button class="btn-start btn-card" data-back="selectView">Yeni Kelimeler Seç</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 4. EKRAN: TEST / QUIZ MODU -->
-    <section class="view-panel" id="quizView">
-      <div class="session-header">
-        <button class="btn-back" data-back="selectView">⬅️ Seçime Dön</button>
-        <div class="session-progress">
-          <div class="progress-track"><div class="progress-bar" id="quizProgressBar"></div></div>
-          <span class="progress-counter" id="quizCounter">1 / 10</span>
-        </div>
-        <div class="quiz-score">Puan: <span id="quizScore">0</span></div>
-      </div>
-
-      <div class="quiz-stage">
-        <div class="question-box">
-          <span class="question-type" id="quizWordType">Verb</span>
-          <h2 class="question-word" id="quizQuestionWord">nachweisen</h2>
-          <p class="question-context" id="quizQuestionContext">etwas (Akk.) nachweisen</p>
-        </div>
-
-        <div class="options-grid" id="quizOptionsGrid">
-          <!-- 4 Seçenek Butonu JS ile üretilecek -->
-        </div>
-
-        <div class="quiz-feedback-bar" id="quizFeedbackBar" style="display:none;">
-          <div class="feedback-content">
-            <span class="feedback-icon" id="feedbackIcon">✅</span>
-            <div class="feedback-texts">
-              <strong id="feedbackTitle">Doğru!</strong>
-              <p id="feedbackExample">Örnek cümle buraya gelecek.</p>
-            </div>
-          </div>
-          <button class="btn-next-question" id="btnNextQuiz">Sonraki Soru ➡️</button>
-        </div>
-      </div>
-    </section>
-
+  <!-- Mobil Header -->
+  <div class="md:hidden flex items-center justify-between p-4 bg-slate-950 border-b border-slate-800 z-50">
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-black text-lg">K</div>
+      <span class="font-bold text-lg tracking-tight">Kelime Kutusu</span>
+    </div>
+    <button id="mobileMenuBtn" class="p-2 text-slate-400 hover:text-white focus:outline-none">
+      <i class="fa-solid fa-bars text-xl"></i>
+    </button>
   </div>
 
-  <!-- Veri & Script Dosyaları -->
+  <!-- SOL PANEL (Sidebar) -->
+  <aside id="sidebar" class="fixed md:relative inset-y-0 left-0 w-72 bg-slate-950 border-r border-slate-800 flex flex-col justify-between z-40 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out">
+    <div>
+      <div class="p-5 border-b border-slate-800/80 hidden md:flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-amber-500 flex items-center justify-center text-slate-950 font-black text-xl shadow-lg shadow-amber-500/20">K</div>
+        <div>
+          <h1 class="font-bold text-slate-100 tracking-tight leading-none">Kelime Kutusu</h1>
+          <span class="text-xs text-amber-400/90 font-mono font-medium">TestDaF Pro</span>
+        </div>
+      </div>
+
+      <div class="p-4">
+        <div class="flex items-center justify-between mb-3 px-2">
+          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">Modüller</span>
+          <span id="deckCountBadge" class="text-xs font-mono bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full">0</span>
+        </div>
+        <ul id="deckList" class="space-y-1 max-h-[calc(100vh-280px)] overflow-y-auto pr-1">
+          <!-- JS ile dolacak -->
+        </ul>
+      </div>
+    </div>
+
+    <!-- Yıldızlı Kelimeler & Dışa Aktar -->
+    <div class="p-4 border-t border-slate-800/80 bg-slate-950/50 space-y-3">
+      <button id="filterStarredBtn" class="w-full bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-amber-400 font-semibold py-2 px-3 rounded-lg text-xs flex items-center justify-between transition-colors">
+        <span><i class="fa-solid fa-star mr-2"></i> Yıldızlı Kelimelerim</span>
+        <span id="starredCountBadge" class="bg-amber-500/20 px-2 py-0.5 rounded-full text-xs font-mono">0</span>
+      </button>
+
+      <div class="flex items-center justify-between pt-2 border-t border-slate-800/50 text-xs">
+        <button id="exportDataBtn" class="text-slate-400 hover:text-amber-400 flex items-center gap-1.5 transition-colors">
+          <i class="fa-solid fa-download"></i> Dışa Aktar
+        </button>
+        <label class="text-slate-400 hover:text-amber-400 flex items-center gap-1.5 cursor-pointer transition-colors">
+          <i class="fa-solid fa-upload"></i> İçe Aktar
+          <input type="file" id="importFileInput" accept=".json" class="hidden">
+        </label>
+      </div>
+    </div>
+  </aside>
+
+  <!-- SAĞ PANEL (Ana İçerik) -->
+  <main class="flex-1 flex flex-col h-full bg-slate-900 overflow-y-auto relative">
+    
+    <!-- Boş Durum -->
+    <div id="emptyState" class="flex-1 flex flex-col items-center justify-center p-8 text-center my-auto">
+      <div class="w-20 h-20 bg-slate-800/80 rounded-3xl flex items-center justify-center text-amber-400 text-3xl mb-4 border border-slate-700/50 shadow-xl">
+        <i class="fa-solid fa-book-bookmark"></i>
+      </div>
+      <h2 class="text-2xl font-bold text-slate-200 mb-2">Modül Seçin</h2>
+      <p class="text-slate-400 max-w-md text-sm leading-relaxed">
+        Sol menüden çalışmak istediğiniz TestDaF modülünü seçerek başlayın.
+      </p>
+    </div>
+
+    <!-- Aktif Deste Görünümü -->
+    <div id="deckView" class="flex-1 flex flex-col p-4 md:p-8 max-w-5xl w-full mx-auto hidden">
+
+      <!-- Başlık ve Mod Geçişleri -->
+      <header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800 mb-6">
+        <div>
+          <span id="deckBadge" class="text-xs font-mono text-amber-400 font-semibold uppercase tracking-wider">0 KELİME</span>
+          <h2 id="deckTitle" class="text-2xl md:text-3xl font-extrabold text-white tracking-tight">—</h2>
+        </div>
+
+        <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 self-start sm:self-auto gap-1">
+          <button class="mode-btn active px-3.5 py-2 rounded-lg text-xs md:text-sm font-semibold transition-all text-slate-400 hover:text-white" data-mode="cards">
+            <i class="fa-solid fa-list-check mr-1.5"></i> Seç & Liste
+          </button>
+          <button class="mode-btn px-3.5 py-2 rounded-lg text-xs md:text-sm font-semibold transition-all text-slate-400 hover:text-white" data-mode="study" id="btnModeStudy">
+            <i class="fa-solid fa-clone mr-1.5"></i> Kartlar
+          </button>
+          <button class="mode-btn px-3.5 py-2 rounded-lg text-xs md:text-sm font-semibold transition-all text-slate-400 hover:text-white" data-mode="match" id="btnModeMatch">
+            <i class="fa-solid fa-bolt mr-1.5"></i> Eşleştirme
+          </button>
+          <button class="mode-btn px-3.5 py-2 rounded-lg text-xs md:text-sm font-semibold transition-all text-slate-400 hover:text-white" data-mode="quiz" id="btnModeQuiz">
+            <i class="fa-solid fa-circle-question mr-1.5"></i> Test
+          </button>
+        </div>
+      </header>
+
+      <!-- PANEL 1: KELİME SEÇİM & LİSTE PANELİ -->
+      <section id="panel-cards" class="space-y-6">
+        
+        <!-- Hızlı Seçim Araç Çubuğu -->
+        <div class="bg-slate-950/80 border border-slate-800 p-4 rounded-2xl flex flex-wrap items-center justify-between gap-4">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-bold text-slate-200">Seçim:</span>
+            <span id="selectedCountDisplay" class="text-xs font-mono bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded-full font-bold">0 Seçildi</span>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <button id="btnSelectAll" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold px-3 py-2 rounded-lg transition-colors">Tümünü Seç</button>
+            <button id="btnClearSelection" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-400 hover:text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors">Temizle</button>
+            <button id="btnSelect5" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-400 text-xs font-semibold px-3 py-2 rounded-lg transition-colors">+5 Rastgele</button>
+            <button id="btnSelect10" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-400 text-xs font-semibold px-3 py-2 rounded-lg transition-colors">+10 Rastgele</button>
+          </div>
+        </div>
+
+        <!-- Arama Çubuğu -->
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
+          <input type="text" id="cardSearchInput" placeholder="Kelime veya anlam ara…" 
+                 class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500 transition-colors">
+        </div>
+
+        <!-- Kelime Tablosu -->
+        <div class="bg-slate-950/50 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+          <ul id="cardTable" class="divide-y divide-slate-800/60">
+            <!-- JS ile dolacak -->
+          </ul>
+        </div>
+      </section>
+
+      <!-- PANEL 2: KARTLAR (FLASHCARD MODU) -->
+      <section id="panel-study" class="hidden flex-1 flex flex-col items-center justify-center my-auto py-4">
+        <div class="w-full max-w-xl space-y-6">
+          <div class="flex items-center justify-between text-xs font-mono text-slate-400 px-1">
+            <span id="studyProgressText">1 / 1</span>
+            <button id="studyStarBtn" class="text-base text-slate-500 hover:text-amber-400 transition-colors">
+              <i class="fa-solid fa-star"></i>
+            </button>
+          </div>
+
+          <!-- 3D Flashcard -->
+          <div class="perspective-1000 w-full h-88 min-h-[340px] cursor-pointer group" id="flashcardContainer">
+            <div id="flashcardInner" class="relative w-full h-full duration-500 transform-style-3d shadow-2xl rounded-3xl border border-slate-800 bg-slate-950">
+              
+              <!-- ÖN YÜZ (Almanca) -->
+              <div class="absolute inset-0 w-full h-full backface-hidden rounded-3xl p-8 flex flex-col justify-between items-center text-center bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800">
+                <div class="w-full flex items-center justify-between text-slate-500 text-xs font-mono">
+                  <span id="flashGrammarFront" class="bg-slate-800/80 px-2.5 py-1 rounded-md text-amber-400">Verb</span>
+                  <button id="ttsFrontBtn" class="p-2 text-slate-400 hover:text-amber-400 text-base transition-colors" title="Dinle">
+                    <i class="fa-solid fa-volume-high"></i>
+                  </button>
+                </div>
+
+                <div class="my-auto px-4 w-full">
+                  <h3 id="flashFront" class="text-2xl md:text-3xl font-extrabold text-white tracking-tight mb-2 break-words">—</h3>
+                  <p class="text-xs text-slate-500 font-mono mt-1">çevirmek için tıklayın</p>
+                </div>
+
+                <div class="text-xs text-slate-500 flex items-center gap-1 font-mono">
+                  <i class="fa-solid fa-arrows-rotate text-amber-500"></i> [Boşluk] / Dokun
+                </div>
+              </div>
+
+              <!-- ARKA YÜZ (Türkçe) -->
+              <div class="absolute inset-0 w-full h-full backface-hidden rotate-y-180 rounded-3xl p-6 md:p-8 flex flex-col justify-between items-center text-center bg-slate-950 border border-amber-500/30">
+                <div class="w-full flex items-center justify-between text-slate-500 text-xs font-mono">
+                  <span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-1 rounded-md">Anlamı & Örnek</span>
+                  <button id="ttsExampleBtn" class="p-2 text-slate-400 hover:text-amber-400 text-base transition-colors" title="Örneği Dinle">
+                    <i class="fa-solid fa-volume-high"></i>
+                  </button>
+                </div>
+
+                <div class="my-auto px-2 space-y-3 w-full">
+                  <h4 id="flashBack" class="text-xl md:text-2xl font-bold text-amber-400 break-words">—</h4>
+                  <p id="flashExample" class="text-sm md:text-base text-slate-300 italic bg-slate-900/80 p-3 rounded-xl border border-slate-800 leading-relaxed font-sans max-h-36 overflow-y-auto w-full text-left">—</p>
+                </div>
+
+                <div class="text-xs text-slate-500 font-mono">
+                  [1] Tekrar Et | [2] Öğrendim
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Öğrenme Kontrolleri -->
+          <div class="flex items-center justify-between gap-3 pt-2">
+            <button id="btnCardRepeat" class="flex-1 bg-slate-950 hover:bg-rose-950/40 border border-slate-800 hover:border-rose-500/50 text-slate-300 hover:text-rose-300 font-semibold py-3 px-4 rounded-xl text-sm transition-all flex items-center justify-center gap-2">
+              <i class="fa-solid fa-rotate-left text-rose-400"></i> Tekrar Et <span>[1]</span>
+            </button>
+            <button id="btnCardKnown" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 px-4 rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20">
+              Öğrendim <i class="fa-solid fa-check"></i> <span>[2]</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- PANEL 3: DUOLINGO EŞLEŞTİRME MODU -->
+      <section id="panel-match" class="hidden flex-1 flex flex-col items-center justify-center my-auto py-4">
+        <div class="w-full max-w-3xl space-y-6">
+          <div class="flex items-center justify-between text-xs font-mono text-slate-400 px-1">
+            <span id="matchPairsRemaining">0 Çift Kaldı</span>
+            <button id="btnRestartMatch" class="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1.5">
+              <i class="fa-solid fa-rotate-right"></i> Yeniden Karıştır
+            </button>
+          </div>
+
+          <!-- Eşleştirme Izgarası -->
+          <div id="matchGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            <!-- JS ile doldurulacak -->
+          </div>
+
+          <!-- Tamamlandı Kartı -->
+          <div id="matchCompleteBox" class="hidden bg-slate-950 border border-slate-800 rounded-3xl p-8 text-center space-y-6 shadow-2xl">
+            <div class="w-16 h-16 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center text-3xl mx-auto">
+              <i class="fa-solid fa-fire"></i>
+            </div>
+            <div>
+              <h3 class="text-2xl font-bold text-white mb-1">Mükemmel!</h3>
+              <p class="text-slate-400 text-sm">Seçtiğin tüm kelimeleri başarıyla eşleştirdin.</p>
+            </div>
+            <button id="btnMatchAgain" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 px-8 rounded-xl text-sm transition-all shadow-lg shadow-amber-500/20">
+              Tekrar Oyna
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- PANEL 4: TEST (QUIZ MODU) -->
+      <section id="panel-quiz" class="hidden flex-1 flex flex-col items-center justify-center my-auto py-4">
+        <div class="w-full max-w-lg space-y-6">
+          <div id="quizBox" class="bg-slate-950 border border-slate-800 rounded-3xl p-6 shadow-2xl relative">
+            <div class="flex items-center justify-between text-xs font-mono text-slate-400 mb-6">
+              <span id="quizProgressText">Soru 1 / 10</span>
+              <button id="quizTtsBtn" class="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1.5">
+                <i class="fa-solid fa-volume-high"></i> Dinle
+              </button>
+            </div>
+
+            <div class="text-center my-6">
+              <span class="text-xs text-amber-400 font-mono font-semibold uppercase tracking-wider block mb-1">Anlamı Nedir?</span>
+              <h3 id="quizQuestion" class="text-2xl md:text-3xl font-extrabold text-white tracking-tight break-words">—</h3>
+            </div>
+
+            <div id="quizOptions" class="grid grid-cols-1 gap-3 mt-8">
+              <!-- JS ile dolacak -->
+            </div>
+          </div>
+
+          <div id="quizResultBox" class="hidden bg-slate-950 border border-slate-800 rounded-3xl p-8 text-center space-y-6 shadow-2xl">
+            <div class="w-16 h-16 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-full flex items-center justify-center text-2xl mx-auto">
+              <i class="fa-solid fa-trophy"></i>
+            </div>
+            <div>
+              <h3 class="text-2xl font-bold text-white mb-1">Test Tamamlandı!</h3>
+              <p id="quizScoreText" class="text-3xl font-extrabold text-amber-400 font-mono my-3">0 / 0 Doğru</p>
+            </div>
+            <button id="retryQuizBtn" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 px-8 rounded-xl text-sm transition-all shadow-lg shadow-amber-500/20">
+              <i class="fa-solid fa-rotate-right mr-2"></i> Tekrar Dene
+            </button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Bildirim Toast -->
+  <div id="toastNotification" class="fixed bottom-5 right-5 bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 transform translate-y-20 opacity-0 transition-all duration-300 z-50 pointer-events-none">
+    <i id="toastIcon" class="fa-solid fa-circle-check text-amber-400 text-lg"></i>
+    <span id="toastMessage" class="text-sm font-medium">İşlem başarılı!</span>
+  </div>
+
   <script src="wordsData.js"></script>
   <script src="script.js"></script>
 </body>
