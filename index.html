@@ -1,1 +1,220 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WortSchatz Pro - TestDaF Kelime Platformu</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
 
+  <div class="app-layout">
+    
+    <!-- ÜST BAR / HEADER -->
+    <header class="top-nav">
+      <div class="brand">
+        <div class="brand-icon">⚡</div>
+        <div>
+          <h1>WortSchatz <span>PRO</span></h1>
+          <p class="brand-sub">TestDaF Akademik Kelime Havuzu</p>
+        </div>
+      </div>
+
+      <div class="nav-controls">
+        <button class="nav-tab active" data-view="selectView">📋 Kelime Seçimi</button>
+        <button class="nav-tab" data-view="cardView" id="navCardBtn" disabled>🗂️ Kartlar</button>
+        <button class="nav-tab" data-view="matchView" id="navMatchBtn" disabled>⚡ Eşleştirme</button>
+        <button class="nav-tab" data-view="quizView" id="navQuizBtn" disabled>🧠 Test</button>
+      </div>
+
+      <div class="header-stats">
+        <button class="btn-starred-filter" id="filterStarredOnlyBtn">
+          ⭐ Yıldızlılar (<span id="totalStarredCount">0</span>)
+        </button>
+      </div>
+    </header>
+
+    <!-- 1. EKRAN: MODÜL & KELİME SEÇİM PANELİ -->
+    <main class="view-panel active" id="selectView">
+      <div class="selection-grid">
+        
+        <!-- Sol Kolon: Modül & Kategori Listesi -->
+        <aside class="module-sidebar">
+          <div class="sidebar-header">
+            <h3>📂 Modüller</h3>
+          </div>
+          <div class="module-list" id="moduleList">
+            <!-- JS ile doldurulacak (1.1, 1.2, 4.3 vb.) -->
+          </div>
+        </aside>
+
+        <!-- Sağ Kolon: Kelime Listesi & Seçim Araçları -->
+        <section class="word-picker-area">
+          <div class="picker-toolbar">
+            <div class="toolbar-info">
+              <h2 id="currentModuleTitle">1.1 Schule und Bildung</h2>
+              <p><span id="selectedWordsCount">0</span> kelime seçildi</p>
+            </div>
+            
+            <div class="toolbar-actions">
+              <input type="text" id="searchWordInput" placeholder="Kelime ara (Almanca/Türkçe)..." class="search-input">
+              <button class="tool-btn" id="selectAllBtn">Tümünü Seç</button>
+              <button class="tool-btn" id="clearSelectionBtn">Temizle</button>
+              <button class="tool-btn" id="selectQuick5Btn">+5 Rastgele</button>
+              <button class="tool-btn" id="selectQuick10Btn">+10 Rastgele</button>
+            </div>
+          </div>
+
+          <!-- Kelime Tablosu / Izgarası -->
+          <div class="words-table-container">
+            <div class="words-list" id="wordsCheckList">
+              <!-- JS dinamik checkbox listesi -->
+            </div>
+          </div>
+
+          <!-- Alt Başlatma Çubuğu -->
+          <div class="start-bar">
+            <div class="start-info">
+              Seçilen <strong><span id="startSelectedCount">0</span></strong> kelime ile başla:
+            </div>
+            <div class="start-buttons">
+              <button class="btn-start btn-card" id="startCardsBtn" disabled>🗂️ Kartları Aç</button>
+              <button class="btn-start btn-match" id="startMatchBtn" disabled>⚡ Eşleştirmeyi Başlat</button>
+              <button class="btn-start btn-quiz" id="startQuizBtn" disabled>🧠 Teste Başla</button>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <!-- 2. EKRAN: FLASHCARD (KART ÇEVİRME & ARALIKLI TEKRAR) -->
+    <section class="view-panel" id="cardView">
+      <div class="session-header">
+        <button class="btn-back" data-back="selectView">⬅️ Seçime Dön</button>
+        <div class="session-progress">
+          <div class="progress-track"><div class="progress-bar" id="cardProgressBar"></div></div>
+          <span class="progress-counter" id="cardCounter">1 / 10</span>
+        </div>
+        <button class="btn-star-active" id="cardStarBtn">⭐</button>
+      </div>
+
+      <div class="card-stage">
+        <div class="card-3d-wrap" id="card3dWrap">
+          <div class="card-inner" id="cardInner">
+            
+            <!-- Ön Yüz -->
+            <div class="card-face front-face">
+              <span class="badge-type" id="frontType">Nomen</span>
+              <h2 class="main-term" id="frontTerm">die Ausbildung</h2>
+              <p class="prep-text" id="frontGrammar"></p>
+              <span class="hint-text">Çevirmek için tıkla veya [Boşluk] tuşuna bas</span>
+            </div>
+
+            <!-- Arka Yüz -->
+            <div class="card-face back-face">
+              <span class="badge-register" id="backRegister">Wissenschaftssprache</span>
+              <h3 class="meaning-tr" id="backMeaning">mesleki eğitim</h3>
+              
+              <div class="example-box">
+                <p class="ex-de" id="backExDe">Die Ausbildung dauert in der Regel drei Jahre.</p>
+                <p class="ex-tr" id="backExTr">Mesleki eğitim genellikle üç yıl sürer.</p>
+              </div>
+
+              <div class="tip-box" id="backTipBox" style="display:none;">
+                💡 <span id="backTip"></span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <div class="card-action-bar">
+        <button class="action-btn btn-again" id="btnCardAgain" title="Tekrar et (Kuyruğun sonuna atar)">
+          🔄 Tekrar Et <span>[1]</span>
+        </button>
+        <button class="action-btn btn-flip" id="btnCardFlip">
+          🔃 Çevir <span>[Boşluk]</span>
+        </button>
+        <button class="action-btn btn-known" id="btnCardKnown" title="Öğrendim (Tamamlandı sayar)">
+          ✅ Öğrendim <span>[2]</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- 3. EKRAN: DUOLINGO EŞLEŞTİRME MODU -->
+    <section class="view-panel" id="matchView">
+      <div class="session-header">
+        <button class="btn-back" data-back="selectView">⬅️ Seçime Dön</button>
+        <div class="match-status">
+          <span>⚡ Eşleştirme Modu</span>
+          <span class="badge-round" id="matchPairsLeft">0 Çift Kaldı</span>
+        </div>
+        <button class="btn-refresh" id="btnResetMatch">🔄 Yeniden Karıştır</button>
+      </div>
+
+      <div class="match-stage">
+        <div class="match-grid" id="matchGrid">
+          <!-- JS dinamik eşleştirme butonları -->
+        </div>
+      </div>
+
+      <div class="match-finish-modal" id="matchFinishModal" style="display:none;">
+        <div class="modal-card">
+          <div class="modal-icon">🎉</div>
+          <h2>Tebrikler! Tüm Çiftler Eşleşti!</h2>
+          <p>Seçili kelimeleri başarıyla tamamladın.</p>
+          <div class="modal-btns">
+            <button class="btn-start btn-match" id="btnRestartMatch">Tekrar Oyna</button>
+            <button class="btn-start btn-card" data-back="selectView">Yeni Kelimeler Seç</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. EKRAN: TEST / QUIZ MODU -->
+    <section class="view-panel" id="quizView">
+      <div class="session-header">
+        <button class="btn-back" data-back="selectView">⬅️ Seçime Dön</button>
+        <div class="session-progress">
+          <div class="progress-track"><div class="progress-bar" id="quizProgressBar"></div></div>
+          <span class="progress-counter" id="quizCounter">1 / 10</span>
+        </div>
+        <div class="quiz-score">Puan: <span id="quizScore">0</span></div>
+      </div>
+
+      <div class="quiz-stage">
+        <div class="question-box">
+          <span class="question-type" id="quizWordType">Verb</span>
+          <h2 class="question-word" id="quizQuestionWord">nachweisen</h2>
+          <p class="question-context" id="quizQuestionContext">etwas (Akk.) nachweisen</p>
+        </div>
+
+        <div class="options-grid" id="quizOptionsGrid">
+          <!-- 4 Seçenek Butonu JS ile üretilecek -->
+        </div>
+
+        <div class="quiz-feedback-bar" id="quizFeedbackBar" style="display:none;">
+          <div class="feedback-content">
+            <span class="feedback-icon" id="feedbackIcon">✅</span>
+            <div class="feedback-texts">
+              <strong id="feedbackTitle">Doğru!</strong>
+              <p id="feedbackExample">Örnek cümle buraya gelecek.</p>
+            </div>
+          </div>
+          <button class="btn-next-question" id="btnNextQuiz">Sonraki Soru ➡️</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Veri & Script Dosyaları -->
+  <script src="wordsData.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
