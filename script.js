@@ -1,569 +1,674 @@
-// ==========================================
-// UYGULAMA DURUMU (STATE)
-// ==========================================
-let currentModuleId = "1.1";
-let selectedWordIds = new Set();
-let starredWordIds = new Set(JSON.parse(localStorage.getItem('ws_starred') || '[]'));
+const STORAGE_KEY = 'kelime-kutusu-full-v2';
 
-// Flashcard Oturum Durumu
-let cardQueue = [];
-let currentCardIndex = 0;
+// Ana Uygulama Durumu
+let state = loadState();
+let selectedCards = []; // O an seçili olan kelimeler
 
-// Match Oturum Durumu
+// Flashcard Durumu
+let studyQueue = [];
+let studyIndex = 0;
+let isFlipped = false;
+
+// Match Durumu
 let matchTiles = [];
-let firstSelectedTile = null;
-let matchedPairsCount = 0;
-let totalPairsInRound = 0;
+let firstTile = null;
+let matchedCount = 0;
+let totalPairs = 0;
 
-// Quiz Oturum Durumu
+// Quiz Durumu
 let quizQuestions = [];
-let currentQuizIndex = 0;
+let quizIndex = 0;
 let quizScore = 0;
+let quizLocked = false;
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.warn('Veri okuma hatası:', e);
+  }
+  return { 
+    decks: PDF_DATA_DECKS, 
+    activeDeckId: 'deck-1-1', 
+    starred: [] // [{ term, def, type, example }]
+  };
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function getActiveDeck() {
+  if (state.activeDeckId === 'starred') {
+    return { id: 'starred', name: '⭐ Yıldızlı Kelimeler', cards: state.starred };
+  }
+  return state.decks.find(d => d.id === state.activeDeckId) || state.decks[0];
+}
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Sesli Telaffuz (Web Speech API)
+function speakGerman(text) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const clean = text.replace(/\(.*?\)/g, '').replace(/[\*\/]/g, '').trim();
+  const ut = new SpeechSynthesisUtterance(clean);
+  ut.lang = 'de-DE';
+  ut.rate = 0.88;
+  window.speechSynthesis.speak(ut);
+}
 
 // ==========================================
-// DOM ELEMENTLERİ
+// DOM REFERANSLARI
 // ==========================================
-const views = {
-  selectView: document.getElementById('selectView'),
-  cardView: document.getElementById('cardView'),
-  matchView: document.getElementById('matchView'),
-  quizView: document.getElementById('quizView')
+const sidebar = document.getElementById('sidebar');
+const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+const deckList = document.getElementById('deckList');
+const deckCountBadge = document.getElementById('deckCountBadge');
+const starredCountBadge = document.getElementById('starredCountBadge');
+const filterStarredBtn = document.getElementById('filterStarredBtn');
+
+const emptyState = document.getElementById('emptyState');
+const deckView = document.getElementById('deckView');
+const deckBadge = document.getElementById('deckBadge');
+const deckTitle = document.getElementById('deckTitle');
+
+const modeButtons = document.querySelectorAll('.mode-btn');
+const panels = {
+  cards: document.getElementById('panel-cards'),
+  study: document.getElementById('panel-study'),
+  match: document.getElementById('panel-match'),
+  quiz:  document.getElementById('panel-quiz'),
 };
 
-const navTabs = document.querySelectorAll('.nav-tab');
-const moduleListEl = document.getElementById('moduleList');
-const wordsCheckListEl = document.getElementById('wordsCheckList');
-const currentModuleTitleEl = document.getElementById('currentModuleTitle');
-const selectedWordsCountEl = document.getElementById('selectedWordsCount');
-const startSelectedCountEl = document.getElementById('startSelectedCount');
-const totalStarredCountEl = document.getElementById('totalStarredCount');
-const searchWordInput = document.getElementById('searchWordInput');
-const filterStarredOnlyBtn = document.getElementById('filterStarredOnlyBtn');
+const cardTable = document.getElementById('cardTable');
+const cardSearchInput = document.getElementById('cardSearchInput');
+const selectedCountDisplay = document.getElementById('selectedCountDisplay');
+const btnSelectAll = document.getElementById('btnSelectAll');
+const btnClearSelection = document.getElementById('btnClearSelection');
+const btnSelect5 = document.getElementById('btnSelect5');
+const btnSelect10 = document.getElementById('btnSelect10');
 
-// Başlatma Butonları
-const startCardsBtn = document.getElementById('startCardsBtn');
-const startMatchBtn = document.getElementById('startMatchBtn');
-const startQuizBtn = document.getElementById('startQuizBtn');
-const navCardBtn = document.getElementById('navCardBtn');
-const navMatchBtn = document.getElementById('navMatchBtn');
-const navQuizBtn = document.getElementById('navQuizBtn');
-
-// Flashcard Elementleri
-const cardInner = document.getElementById('cardInner');
-const card3dWrap = document.getElementById('card3dWrap');
-const frontTerm = document.getElementById('frontTerm');
-const frontType = document.getElementById('frontType');
-const frontGrammar = document.getElementById('frontGrammar');
-const backMeaning = document.getElementById('backMeaning');
-const backRegister = document.getElementById('backRegister');
-const backExDe = document.getElementById('backExDe');
-const backExTr = document.getElementById('backExTr');
-const backTipBox = document.getElementById('backTipBox');
-const backTip = document.getElementById('backTip');
-const cardProgressBar = document.getElementById('cardProgressBar');
-const cardCounter = document.getElementById('cardCounter');
-const cardStarBtn = document.getElementById('cardStarBtn');
-const btnCardFlip = document.getElementById('btnCardFlip');
-const btnCardAgain = document.getElementById('btnCardAgain');
+// Flashcard
+const flashcardInner = document.getElementById('flashcardInner');
+const flashFront = document.getElementById('flashFront');
+const flashBack = document.getElementById('flashBack');
+const flashGrammarFront = document.getElementById('flashGrammarFront');
+const flashExample = document.getElementById('flashExample');
+const studyProgressText = document.getElementById('studyProgressText');
+const studyStarBtn = document.getElementById('studyStarBtn');
+const btnCardRepeat = document.getElementById('btnCardRepeat');
 const btnCardKnown = document.getElementById('btnCardKnown');
+const ttsFrontBtn = document.getElementById('ttsFrontBtn');
+const ttsExampleBtn = document.getElementById('ttsExampleBtn');
 
-// Match Elementleri
+// Match
 const matchGrid = document.getElementById('matchGrid');
-const matchPairsLeft = document.getElementById('matchPairsLeft');
-const matchFinishModal = document.getElementById('matchFinishModal');
-const btnResetMatch = document.getElementById('btnResetMatch');
+const matchPairsRemaining = document.getElementById('matchPairsRemaining');
+const matchCompleteBox = document.getElementById('matchCompleteBox');
 const btnRestartMatch = document.getElementById('btnRestartMatch');
+const btnMatchAgain = document.getElementById('btnMatchAgain');
 
-// Quiz Elementleri
-const quizWordType = document.getElementById('quizWordType');
-const quizQuestionWord = document.getElementById('quizQuestionWord');
-const quizQuestionContext = document.getElementById('quizQuestionContext');
-const quizOptionsGrid = document.getElementById('quizOptionsGrid');
-const quizProgressBar = document.getElementById('quizProgressBar');
-const quizCounter = document.getElementById('quizCounter');
-const quizScoreEl = document.getElementById('quizScore');
-const quizFeedbackBar = document.getElementById('quizFeedbackBar');
-const feedbackIcon = document.getElementById('feedbackIcon');
-const feedbackTitle = document.getElementById('feedbackTitle');
-const feedbackExample = document.getElementById('feedbackExample');
-const btnNextQuiz = document.getElementById('btnNextQuiz');
+// Quiz
+const quizBox = document.getElementById('quizBox');
+const quizResultBox = document.getElementById('quizResultBox');
+const quizQuestion = document.getElementById('quizQuestion');
+const quizOptions = document.getElementById('quizOptions');
+const quizProgressText = document.getElementById('quizProgressText');
+const quizScoreText = document.getElementById('quizScoreText');
+const retryQuizBtn = document.getElementById('retryQuizBtn');
+const quizTtsBtn = document.getElementById('quizTtsBtn');
 
 // ==========================================
-// BAŞLANGIÇ & MODÜL YÜKLEME
+// SEÇİM VE LİSTELEME
 // ==========================================
-function initApp() {
-  updateStarredBadge();
-  renderModuleSidebar();
-  renderWordList();
-  setupEventListeners();
-}
+function renderDeckList() {
+  deckList.innerHTML = '';
+  deckCountBadge.textContent = state.decks.length;
+  starredCountBadge.textContent = state.starred.length;
 
-function updateStarredBadge() {
-  totalStarredCountEl.textContent = starredWordIds.size;
-  localStorage.setItem('ws_starred', JSON.stringify([...starredWordIds]));
-}
+  state.decks.forEach(deck => {
+    const li = document.createElement('li');
+    const isActive = deck.id === state.activeDeckId;
 
-function renderModuleSidebar() {
-  moduleListEl.innerHTML = '';
-  modulesData.forEach(mod => {
-    const btn = document.createElement('button');
-    btn.className = `module-btn ${mod.id === currentModuleId ? 'active' : ''}`;
-    btn.dataset.moduleId = mod.id;
-    btn.innerHTML = `
-      <span>${mod.title}</span>
-      <span class="module-count">${mod.words.length}</span>
-    `;
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.module-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentModuleId = mod.id;
-      renderWordList();
-    });
-    moduleListEl.appendChild(btn);
-  });
-}
+    li.className = `flex items-center justify-between rounded-xl px-3 py-2.5 transition-all cursor-pointer ${
+      isActive 
+        ? 'bg-amber-500/10 text-amber-400 font-bold border border-amber-500/30' 
+        : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+    }`;
 
-function getCurrentModuleWords() {
-  const currentMod = modulesData.find(m => m.id === currentModuleId);
-  return currentMod ? currentMod.words : [];
-}
-
-function renderWordList(filterStarred = false, searchTerm = '') {
-  const words = getCurrentModuleWords();
-  const currentMod = modulesData.find(m => m.id === currentModuleId);
-  currentModuleTitleEl.textContent = currentMod ? currentMod.title : '';
-
-  wordsCheckListEl.innerHTML = '';
-
-  const filtered = words.filter(w => {
-    const matchesSearch = w.de.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          w.tr.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStar = filterStarred ? starredWordIds.has(w.id) : true;
-    return matchesSearch && matchesStar;
-  });
-
-  if (filtered.length === 0) {
-    wordsCheckListEl.innerHTML = `<div style="text-align:center; padding: 40px; color: var(--text-dim)">Kelime bulunamadı.</div>`;
-    return;
-  }
-
-  filtered.forEach(word => {
-    const isSelected = selectedWordIds.has(word.id);
-    const isStarred = starredWordIds.has(word.id);
-
-    const row = document.createElement('div');
-    row.className = `word-row ${isSelected ? 'selected' : ''}`;
-    row.innerHTML = `
-      <div class="word-row-left">
-        <div class="custom-check"></div>
-        <div>
-          <span class="word-text-de">${word.de}</span>
-          <span class="word-text-grammar">${word.prep || word.type}</span>
-        </div>
+    li.innerHTML = `
+      <div class="flex items-center gap-2.5 min-w-0 flex-1">
+        <i class="fa-solid fa-folder${isActive ? '-open text-amber-400' : ''} text-sm"></i>
+        <span class="truncate text-sm">${escapeHtml(deck.name)}</span>
       </div>
-      <div class="word-row-right">
-        <span class="word-text-tr">${word.tr}</span>
-        <button class="star-icon-btn ${isStarred ? 'active' : ''}" data-word-id="${word.id}">⭐</button>
-      </div>
+      <span class="text-xs font-mono px-2 py-0.5 rounded-full ${isActive ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-900 text-slate-500'}">${deck.cards.length}</span>
     `;
 
-    // Satıra tıklayınca seç/kaldır
-    row.addEventListener('click', (e) => {
-      if (e.target.classList.contains('star-icon-btn')) return;
-      toggleSelectWord(word.id);
+    li.addEventListener('click', () => {
+      state.activeDeckId = deck.id;
+      saveState();
+      resetSelection();
+      setMode('cards');
+      renderAll();
+      if (window.innerWidth < 768) sidebar.classList.add('-translate-x-full');
     });
 
-    // Yıldız butonuna basınca
-    const starBtn = row.querySelector('.star-icon-btn');
-    starBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleStarWord(word.id);
-      starBtn.classList.toggle('active');
-    });
-
-    wordsCheckListEl.appendChild(row);
+    deckList.appendChild(li);
   });
+}
 
+function resetSelection() {
+  const deck = getActiveDeck();
+  selectedCards = deck ? [...deck.cards] : [];
   updateSelectionUI();
 }
 
-function toggleSelectWord(id) {
-  if (selectedWordIds.has(id)) {
-    selectedWordIds.delete(id);
-  } else {
-    selectedWordIds.add(id);
-  }
-  renderWordList(filterStarredOnlyBtn.classList.contains('active'), searchWordInput.value);
-}
-
-function toggleStarWord(id) {
-  if (starredWordIds.has(id)) {
-    starredWordIds.delete(id);
-  } else {
-    starredWordIds.add(id);
-  }
-  updateStarredBadge();
-}
-
 function updateSelectionUI() {
-  const count = selectedWordIds.size;
-  selectedWordsCountEl.textContent = count;
-  startSelectedCountEl.textContent = count;
-
-  const hasSelection = count > 0;
-  startCardsBtn.disabled = !hasSelection;
-  startMatchBtn.disabled = count < 2; // Eşleştirme için en az 2 kelime
-  startQuizBtn.disabled = count < 4;  // Test için en az 4 kelime (4 şık)
-
-  navCardBtn.disabled = !hasSelection;
-  navMatchBtn.disabled = count < 2;
-  navQuizBtn.disabled = count < 4;
+  selectedCountDisplay.textContent = `${selectedCards.length} Seçildi`;
 }
 
-// ==========================================
-// EKRAN GEÇİŞLERİ (VIEW SWITCHING)
-// ==========================================
-function switchView(targetViewId) {
-  Object.values(views).forEach(view => view.classList.remove('active'));
-  views[targetViewId].classList.add('active');
-
-  navTabs.forEach(tab => {
-    tab.classList.toggle('active', tab.dataset.view === targetViewId);
-  });
+function isCardStarred(term) {
+  return state.starred.some(c => c.term === term);
 }
 
-// ==========================================
-// 1. FLASHCARD MODU MANTIĞI
-// ==========================================
-function startFlashcardSession() {
-  const allWords = getAllWordsFlat();
-  cardQueue = allWords.filter(w => selectedWordIds.has(w.id));
-  currentCardIndex = 0;
-  switchView('cardView');
-  loadFlashcard();
+function toggleStarCard(card) {
+  const idx = state.starred.findIndex(c => c.term === card.term);
+  if (idx > -1) {
+    state.starred.splice(idx, 1);
+  } else {
+    state.starred.push(card);
+  }
+  saveState();
+  renderDeckList();
+  renderCardTable();
 }
 
-function loadFlashcard() {
-  if (cardQueue.length === 0) {
-    switchView('selectView');
+function renderCardTable() {
+  const deck = getActiveDeck();
+  cardTable.innerHTML = '';
+
+  if (!deck || deck.cards.length === 0) {
+    cardTable.innerHTML = `<li class="p-8 text-center text-slate-500 italic text-sm">Bu modülde kelime bulunamadı.</li>`;
     return;
   }
 
-  cardInner.classList.remove('flipped');
-  const word = cardQueue[currentCardIndex];
+  const query = cardSearchInput.value.toLowerCase().trim();
+  const filtered = deck.cards.filter(c => 
+    c.term.toLowerCase().includes(query) || 
+    c.def.toLowerCase().includes(query)
+  );
 
-  frontTerm.textContent = word.de;
-  frontType.textContent = word.type;
-  frontGrammar.textContent = word.prep || '';
+  filtered.forEach((card, i) => {
+    const isSelected = selectedCards.some(c => c.term === card.term);
+    const isStarred = isCardStarred(card.term);
 
-  backRegister.textContent = word.register || 'Wissenschaftssprache';
-  backMeaning.textContent = word.tr;
-  backExDe.textContent = word.ex_de || '';
-  backExTr.textContent = word.ex_tr || '';
+    const li = document.createElement('li');
+    li.className = `p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 transition-colors cursor-pointer ${
+      isSelected ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-slate-900/60'
+    }`;
 
-  if (word.tip) {
-    backTipBox.style.display = 'block';
-    backTip.textContent = word.tip;
+    li.innerHTML = `
+      <div class="flex items-start gap-3 min-w-0 flex-1">
+        <input type="checkbox" ${isSelected ? 'checked' : ''} class="card-check mt-1.5 w-4 h-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-0">
+        <div class="space-y-1 min-w-0 flex-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-bold text-slate-100 text-base">${escapeHtml(card.term)}</span>
+            ${card.type ? `<span class="text-xs font-mono bg-slate-800 text-amber-400 px-2 py-0.5 rounded">${escapeHtml(card.type)}</span>` : ''}
+            <button class="tts-btn text-slate-500 hover:text-amber-400 text-xs p-1" title="Telaffuz">
+              <i class="fa-solid fa-volume-high"></i>
+            </button>
+          </div>
+          <p class="text-sm text-slate-400">${escapeHtml(card.def)}</p>
+          ${card.example ? `<p class="text-xs text-slate-500 italic font-sans border-l-2 border-slate-700 pl-2 mt-1">${escapeHtml(card.example)}</p>` : ''}
+        </div>
+      </div>
+      <button class="star-btn self-end md:self-auto p-2 text-sm transition-colors ${isStarred ? 'text-amber-400' : 'text-slate-600 hover:text-amber-400'}">
+        <i class="fa-solid fa-star"></i>
+      </button>
+    `;
+
+    // Satıra veya checkbox'a tıklama
+    li.addEventListener('click', (e) => {
+      if (e.target.closest('.star-btn') || e.target.closest('.tts-btn')) return;
+      toggleSelectCard(card);
+    });
+
+    li.querySelector('.tts-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      speakGerman(card.term);
+    });
+
+    li.querySelector('.star-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleStarCard(card);
+    });
+
+    cardTable.appendChild(li);
+  });
+}
+
+function toggleSelectCard(card) {
+  const idx = selectedCards.findIndex(c => c.term === card.term);
+  if (idx > -1) {
+    selectedCards.splice(idx, 1);
   } else {
-    backTipBox.style.display = 'none';
+    selectedCards.push(card);
   }
-
-  cardCounter.textContent = `${currentCardIndex + 1} / ${cardQueue.length}`;
-  cardProgressBar.style.width = `${((currentCardIndex + 1) / cardQueue.length) * 100}%`;
-
-  cardStarBtn.classList.toggle('active', starredWordIds.has(word.id));
+  updateSelectionUI();
+  renderCardTable();
 }
 
-function flipCard() {
-  cardInner.classList.toggle('flipped');
-}
+// Seçim Butonları
+btnSelectAll.addEventListener('click', () => {
+  const deck = getActiveDeck();
+  selectedCards = [...deck.cards];
+  updateSelectionUI();
+  renderCardTable();
+});
 
-function nextCardKnown() {
-  cardQueue.splice(currentCardIndex, 1);
-  if (currentCardIndex >= cardQueue.length) {
-    currentCardIndex = 0;
-  }
-  if (cardQueue.length === 0) {
-    alert("🎉 Harika! Seçtiğin tüm kartları öğrendin!");
-    switchView('selectView');
-  } else {
-    loadFlashcard();
-  }
-}
+btnClearSelection.addEventListener('click', () => {
+  selectedCards = [];
+  updateSelectionUI();
+  renderCardTable();
+});
 
-function nextCardAgain() {
-  // Mevcut kelimeyi sona taşı
-  const word = cardQueue.splice(currentCardIndex, 1)[0];
-  cardQueue.push(word);
-  if (currentCardIndex >= cardQueue.length) {
-    currentCardIndex = 0;
+btnSelect5.addEventListener('click', () => {
+  const deck = getActiveDeck();
+  selectedCards = shuffle(deck.cards).slice(0, 5);
+  updateSelectionUI();
+  renderCardTable();
+});
+
+btnSelect10.addEventListener('click', () => {
+  const deck = getActiveDeck();
+  selectedCards = shuffle(deck.cards).slice(0, 10);
+  updateSelectionUI();
+  renderCardTable();
+});
+
+cardSearchInput.addEventListener('input', renderCardTable);
+
+filterStarredBtn.addEventListener('click', () => {
+  if (state.starred.length === 0) {
+    showToast('Henüz yıldızlı kelimeniz yok.', 'error');
+    return;
   }
-  loadFlashcard();
-}
+  state.activeDeckId = 'starred';
+  resetSelection();
+  setMode('cards');
+  renderAll();
+});
 
 // ==========================================
-// 2. DUOLINGO EŞLEŞTİRME MODU MANTIĞI
+// MOD DEĞİŞİMİ
 // ==========================================
-function startMatchSession() {
-  const allWords = getAllWordsFlat();
-  const selected = allWords.filter(w => selectedWordIds.has(w.id));
-  
-  matchTiles = [];
-  selected.forEach(w => {
-    matchTiles.push({ id: w.id, text: w.de, type: 'de' });
-    matchTiles.push({ id: w.id, text: w.tr, type: 'tr' });
+modeButtons.forEach(btn => {
+  btn.addEventListener('click', () => setMode(btn.dataset.mode));
+});
+
+function setMode(mode) {
+  if (mode !== 'cards' && selectedCards.length === 0) {
+    showToast('Lütfen önce en az 1 kelime seçin.', 'error');
+    return;
+  }
+
+  modeButtons.forEach(b => {
+    const active = b.dataset.mode === mode;
+    b.className = `mode-btn px-3.5 py-2 rounded-lg text-xs md:text-sm font-semibold transition-all ${
+      active ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/10' : 'text-slate-400 hover:text-white'
+    }`;
   });
 
-  // Karıştır
-  matchTiles.sort(() => Math.random() - 0.5);
+  Object.entries(panels).forEach(([key, el]) => {
+    el.classList.toggle('hidden', key !== mode);
+  });
 
-  firstSelectedTile = null;
-  matchedPairsCount = 0;
-  totalPairsInRound = selected.length;
-  matchFinishModal.style.display = 'none';
-  matchPairsLeft.textContent = `${totalPairsInRound} Çift Kaldı`;
+  if (mode === 'study') startStudy();
+  if (mode === 'match') startMatch();
+  if (mode === 'quiz') startQuiz();
+}
 
+// ==========================================
+// 1. FLASHCARD (KART ÇEVİRME & ÖĞRENDİM)
+// ==========================================
+function startStudy() {
+  studyQueue = [...selectedCards];
+  studyIndex = 0;
+  isFlipped = false;
+  renderStudyCard();
+}
+
+function renderStudyCard() {
+  isFlipped = false;
+  flashcardInner.classList.remove('rotate-y-180');
+
+  if (studyQueue.length === 0) {
+    showToast('🎉 Tebrikler! Seçili tüm kartları öğrendin!');
+    setMode('cards');
+    return;
+  }
+
+  const card = studyQueue[studyIndex];
+  flashFront.textContent = card.term;
+  flashBack.textContent = card.def;
+  flashGrammarFront.textContent = card.type || 'TestDaF';
+  flashExample.textContent = card.example || '—';
+  studyProgressText.textContent = `${studyIndex + 1} / ${studyQueue.length}`;
+
+  const isStarred = isCardStarred(card.term);
+  studyStarBtn.className = `text-base transition-colors ${isStarred ? 'text-amber-400' : 'text-slate-500 hover:text-amber-400'}`;
+}
+
+flashcardInner.parentElement.addEventListener('click', (e) => {
+  if (e.target.closest('#ttsFrontBtn') || e.target.closest('#ttsExampleBtn')) return;
+  isFlipped = !isFlipped;
+  flashcardInner.classList.toggle('rotate-y-180', isFlipped);
+});
+
+ttsFrontBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (studyQueue[studyIndex]) speakGerman(studyQueue[studyIndex].term);
+});
+
+ttsExampleBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (studyQueue[studyIndex] && studyQueue[studyIndex].example) {
+    speakGerman(studyQueue[studyIndex].example);
+  }
+});
+
+studyStarBtn.addEventListener('click', () => {
+  if (studyQueue[studyIndex]) {
+    toggleStarCard(studyQueue[studyIndex]);
+    renderStudyCard();
+  }
+});
+
+btnCardKnown.addEventListener('click', () => {
+  studyQueue.splice(studyIndex, 1);
+  if (studyIndex >= studyQueue.length) studyIndex = 0;
+  renderStudyCard();
+});
+
+btnCardRepeat.addEventListener('click', () => {
+  const card = studyQueue.splice(studyIndex, 1)[0];
+  studyQueue.push(card);
+  if (studyIndex >= studyQueue.length) studyIndex = 0;
+  renderStudyCard();
+});
+
+// Klavye Kısayolları
+document.addEventListener('keydown', (e) => {
+  const activeMode = document.querySelector('.mode-btn.bg-amber-500')?.dataset.mode;
+  if (activeMode !== 'study') return;
+  if (e.target.tagName === 'INPUT') return;
+
+  if (e.code === 'Space') {
+    e.preventDefault();
+    isFlipped = !isFlipped;
+    flashcardInner.classList.toggle('rotate-y-180', isFlipped);
+  } else if (e.key === '1') {
+    btnCardRepeat.click();
+  } else if (e.key === '2') {
+    btnCardKnown.click();
+  }
+});
+
+// ==========================================
+// 2. DUOLINGO EŞLEŞTİRME MODU
+// ==========================================
+function startMatch() {
+  if (selectedCards.length < 2) {
+    showToast('Eşleştirme için en az 2 kelime seçmelisiniz.', 'error');
+    setMode('cards');
+    return;
+  }
+
+  matchCompleteBox.classList.add('hidden');
+  matchGrid.classList.remove('hidden');
+
+  const pool = selectedCards.slice(0, 12); // Tek seferde en fazla 12 çift
+  totalPairs = pool.length;
+  matchedCount = 0;
+  firstTile = null;
+  matchPairsRemaining.textContent = `${totalPairs} Çift Kaldı`;
+
+  matchTiles = [];
+  pool.forEach(c => {
+    matchTiles.push({ term: c.term, matchKey: c.term, text: c.term, lang: 'de' });
+    matchTiles.push({ term: c.term, matchKey: c.term, text: c.def, lang: 'tr' });
+  });
+
+  matchTiles = shuffle(matchTiles);
   renderMatchGrid();
-  switchView('matchView');
 }
 
 function renderMatchGrid() {
   matchGrid.innerHTML = '';
-  matchTiles.forEach((tile, index) => {
-    const btn = document.createElement('div');
-    btn.className = 'match-tile';
+  matchTiles.forEach(tile => {
+    const btn = document.createElement('button');
+    btn.className = 'match-tile bg-slate-950 hover:bg-slate-800 border-2 border-slate-800 p-4 rounded-2xl text-center text-sm md:text-base font-bold text-slate-200 min-h-[90px] flex items-center justify-center transition-all';
     btn.textContent = tile.text;
-    btn.dataset.id = tile.id;
-    btn.dataset.type = tile.type;
-    btn.dataset.index = index;
 
     btn.addEventListener('click', () => handleTileClick(btn, tile));
     matchGrid.appendChild(btn);
   });
 }
 
-function handleTileClick(tileEl, tileData) {
-  if (tileEl.classList.contains('correct') || tileEl.classList.contains('selected')) return;
+function handleTileClick(btn, tile) {
+  if (btn.classList.contains('pointer-events-none') || btn.classList.contains('border-amber-500')) return;
 
-  if (!firstSelectedTile) {
-    // İlk seçim
-    firstSelectedTile = { el: tileEl, data: tileData };
-    tileEl.classList.add('selected');
+  if (!firstTile) {
+    firstTile = { btn, tile };
+    btn.classList.remove('border-slate-800');
+    btn.classList.add('border-amber-500', 'bg-amber-500/10', 'text-amber-300');
   } else {
-    // İkinci seçim
-    const first = firstSelectedTile;
-    tileEl.classList.add('selected');
+    const prev = firstTile;
+    btn.classList.remove('border-slate-800');
+    btn.classList.add('border-amber-500', 'bg-amber-500/10', 'text-amber-300');
 
-    if (first.data.id === tileData.data.id && first.data.type !== tileData.data.type) {
-      // Doğru Eşleşme
+    if (prev.tile.matchKey === tile.matchKey && prev.tile.lang !== tile.lang) {
+      // Doğru
       setTimeout(() => {
-        first.el.classList.remove('selected');
-        tileEl.classList.remove('selected');
-        first.el.classList.add('correct');
-        tileEl.classList.add('correct');
+        prev.btn.className = 'match-tile bg-emerald-500/20 border-2 border-emerald-500 p-4 rounded-2xl text-center text-emerald-400 font-bold opacity-0 transition-opacity duration-300 pointer-events-none min-h-[90px] flex items-center justify-center';
+        btn.className = 'match-tile bg-emerald-500/20 border-2 border-emerald-500 p-4 rounded-2xl text-center text-emerald-400 font-bold opacity-0 transition-opacity duration-300 pointer-events-none min-h-[90px] flex items-center justify-center';
+        
+        matchedCount++;
+        const rem = totalPairs - matchedCount;
+        matchPairsRemaining.textContent = `${rem} Çift Kaldı`;
 
-        matchedPairsCount++;
-        const left = totalPairsInRound - matchedPairsCount;
-        matchPairsLeft.textContent = `${left} Çift Kaldı`;
-
-        if (left === 0) {
-          matchFinishModal.style.display = 'flex';
+        if (rem === 0) {
+          matchGrid.classList.add('hidden');
+          matchCompleteBox.classList.remove('hidden');
         }
       }, 200);
     } else {
-      // Yanlış Eşleşme
+      // Yanlış
       setTimeout(() => {
-        first.el.classList.add('wrong');
-        tileEl.classList.add('wrong');
+        prev.btn.classList.add('shake', 'border-rose-500', 'bg-rose-500/20', 'text-rose-300');
+        btn.classList.add('shake', 'border-rose-500', 'bg-rose-500/20', 'text-rose-300');
         setTimeout(() => {
-          first.el.classList.remove('selected', 'wrong');
-          tileEl.classList.remove('selected', 'wrong');
+          prev.btn.className = 'match-tile bg-slate-950 hover:bg-slate-800 border-2 border-slate-800 p-4 rounded-2xl text-center text-sm md:text-base font-bold text-slate-200 min-h-[90px] flex items-center justify-center transition-all';
+          btn.className = 'match-tile bg-slate-950 hover:bg-slate-800 border-2 border-slate-800 p-4 rounded-2xl text-center text-sm md:text-base font-bold text-slate-200 min-h-[90px] flex items-center justify-center transition-all';
         }, 400);
       }, 200);
     }
-    firstSelectedTile = null;
+    firstTile = null;
   }
 }
 
-// ==========================================
-// 3. TEST / QUIZ MODU MANTIĞI
-// ==========================================
-function startQuizSession() {
-  const allWords = getAllWordsFlat();
-  const selected = allWords.filter(w => selectedWordIds.has(w.id));
-  
-  quizQuestions = selected.map(word => {
-    // 3 rastgele yanlış seçenek seç
-    const otherWords = allWords.filter(w => w.id !== word.id);
-    otherWords.sort(() => Math.random() - 0.5);
-    const options = [word.tr, otherWords[0].tr, otherWords[1].tr, otherWords[2].tr];
-    options.sort(() => Math.random() - 0.5);
+btnRestartMatch.addEventListener('click', startMatch);
+btnMatchAgain.addEventListener('click', startMatch);
 
-    return {
-      word: word,
-      options: options,
-      correctAnswer: word.tr
-    };
-  });
+// ==========================================
+// 3. TEST / QUIZ MODU
+// ==========================================
+function startQuiz() {
+  if (selectedCards.length < 2) {
+    showToast('Test için en az 2 kelime seçmelisiniz.', 'error');
+    setMode('cards');
+    return;
+  }
 
-  currentQuizIndex = 0;
+  quizBox.classList.remove('hidden');
+  quizResultBox.classList.add('hidden');
+
+  quizQuestions = shuffle([...selectedCards]);
+  quizIndex = 0;
   quizScore = 0;
-  quizScoreEl.textContent = '0';
-  switchView('quizView');
-  loadQuizQuestion();
+  renderQuizQuestion();
 }
 
-function loadQuizQuestion() {
-  quizFeedbackBar.style.display = 'none';
-  const q = quizQuestions[currentQuizIndex];
+function renderQuizQuestion() {
+  quizLocked = false;
+  if (quizIndex >= quizQuestions.length) {
+    quizBox.classList.add('hidden');
+    quizResultBox.classList.remove('hidden');
+    quizScoreText.textContent = `${quizScore} / ${quizQuestions.length} Doğru`;
+    return;
+  }
 
-  quizWordType.textContent = q.word.type;
-  quizQuestionWord.textContent = q.word.de;
-  quizQuestionContext.textContent = q.word.prep || '';
+  const current = quizQuestions[quizIndex];
+  quizQuestion.textContent = current.term;
+  quizProgressText.textContent = `Soru ${quizIndex + 1} / ${quizQuestions.length}`;
 
-  quizCounter.textContent = `${currentQuizIndex + 1} / ${quizQuestions.length}`;
-  quizProgressBar.style.width = `${((currentQuizIndex + 1) / quizQuestions.length) * 100}%`;
+  const deck = getActiveDeck();
+  const others = deck.cards.filter(c => c.term !== current.term);
+  const wrongPicks = shuffle(others).slice(0, 3).map(c => c.def);
+  const options = shuffle([current.def, ...wrongPicks]);
 
-  quizOptionsGrid.innerHTML = '';
-  q.options.forEach(opt => {
+  quizOptions.innerHTML = '';
+  options.forEach(opt => {
     const btn = document.createElement('button');
-    btn.className = 'option-btn';
-    btn.textContent = opt;
-    btn.addEventListener('click', () => handleQuizAnswer(btn, opt, q));
-    quizOptionsGrid.appendChild(btn);
+    btn.className = 'quiz-opt-btn w-full bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-2xl p-4 text-left font-medium text-slate-200 text-sm md:text-base transition-all flex items-center justify-between group';
+    btn.innerHTML = `
+      <span>${escapeHtml(opt)}</span>
+      <i class="fa-regular fa-circle text-slate-600 group-hover:text-amber-400 transition-colors"></i>
+    `;
+    btn.addEventListener('click', () => handleQuizAnswer(btn, opt === current.def, current));
+    quizOptions.appendChild(btn);
   });
 }
 
-function handleQuizAnswer(btnEl, selectedOption, question) {
-  const allOptionBtns = quizOptionsGrid.querySelectorAll('.option-btn');
-  allOptionBtns.forEach(b => b.disabled = true);
+quizTtsBtn.addEventListener('click', () => {
+  if (quizQuestions[quizIndex]) speakGerman(quizQuestions[quizIndex].term);
+});
 
-  const isCorrect = selectedOption === question.correctAnswer;
+function handleQuizAnswer(btn, isCorrect, currentCard) {
+  if (quizLocked) return;
+  quizLocked = true;
+
+  const allBtns = quizOptions.querySelectorAll('.quiz-opt-btn');
+  allBtns.forEach(b => b.classList.add('pointer-events-none'));
 
   if (isCorrect) {
-    btnEl.classList.add('correct');
-    quizScore += 10;
-    quizScoreEl.textContent = quizScore;
-    feedbackIcon.textContent = '✅';
-    feedbackTitle.textContent = 'Harika! Doğru Cevap';
+    btn.className = 'quiz-opt-btn w-full bg-emerald-500/20 border-2 border-emerald-500 rounded-2xl p-4 text-left font-bold text-emerald-300 text-sm md:text-base flex items-center justify-between';
+    btn.querySelector('i').className = 'fa-solid fa-circle-check text-emerald-400 text-lg';
+    quizScore++;
   } else {
-    btnEl.classList.add('wrong');
-    allOptionBtns.forEach(b => {
-      if (b.textContent === question.correctAnswer) b.classList.add('correct');
+    btn.className = 'quiz-opt-btn w-full bg-rose-500/20 border-2 border-rose-500 rounded-2xl p-4 text-left font-bold text-rose-300 text-sm md:text-base flex items-center justify-between';
+    btn.querySelector('i').className = 'fa-solid fa-circle-xmark text-rose-400 text-lg';
+
+    // Doğru şıkkı yak ve kelimeyi sona at
+    allBtns.forEach(b => {
+      if (b.textContent.trim().includes(currentCard.def.trim())) {
+        b.className = 'quiz-opt-btn w-full bg-emerald-500/10 border border-emerald-500/50 rounded-2xl p-4 text-left font-semibold text-emerald-400 text-sm md:text-base flex items-center justify-between';
+      }
     });
-    feedbackIcon.textContent = '❌';
-    feedbackTitle.textContent = `Yanlış! Doğrusu: ${question.correctAnswer}`;
-    // Yanlış bilineni oturumun sonuna ekle
-    quizQuestions.push(question);
-    toggleStarWord(question.word.id); // Otomatik yıldızla
+
+    quizQuestions.push(currentCard); // Sınırsız test döngüsü
+    toggleStarCard(currentCard);     // Yanlış bilinene otomatik yıldız
   }
 
-  feedbackExample.textContent = `${question.word.ex_de} → ${question.word.ex_tr}`;
-  quizFeedbackBar.style.display = 'flex';
+  setTimeout(() => {
+    quizIndex++;
+    renderQuizQuestion();
+  }, 1000);
 }
+
+retryQuizBtn.addEventListener('click', startQuiz);
 
 // ==========================================
-// YARDIMCI VE GLOBAL FONKSİYONLAR
+// VERİ DIŞA / İÇE AKTAR & YARDIMCILAR
 // ==========================================
-function getAllWordsFlat() {
-  let all = [];
-  modulesData.forEach(m => {
-    all = all.concat(m.words);
-  });
-  return all;
+exportDataBtn.addEventListener('click', () => {
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+  const dl = document.createElement('a');
+  dl.setAttribute("href", dataStr);
+  dl.setAttribute("download", `kelime-kutusu-yedek-${new Date().toISOString().slice(0, 10)}.json`);
+  document.body.appendChild(dl);
+  dl.click();
+  dl.remove();
+  showToast('Yedek başarıyla indirildi.');
+});
+
+importFileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    try {
+      const parsed = JSON.parse(event.target.result);
+      if (parsed && Array.isArray(parsed.decks)) {
+        state = parsed;
+        saveState();
+        resetSelection();
+        renderAll();
+        showToast('Veriler içe aktarıldı!');
+      }
+    } catch (err) {
+      showToast('Dosya okuma hatası.', 'error');
+    }
+  };
+  reader.readAsText(file);
+});
+
+function escapeHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
 }
 
-function setupEventListeners() {
-  // Nav Butonları
-  navTabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      const viewId = tab.dataset.view;
-      if (viewId === 'cardView') startFlashcardSession();
-      else if (viewId === 'matchView') startMatchSession();
-      else if (viewId === 'quizView') startQuizSession();
-      else switchView(viewId);
-    });
-  });
+function showToast(msg, type = 'success') {
+  const toast = document.getElementById('toastNotification');
+  const toastMsg = document.getElementById('toastMessage');
+  const toastIcon = document.getElementById('toastIcon');
 
-  // Geri Butonları
-  document.querySelectorAll('[data-back]').forEach(btn => {
-    btn.addEventListener('click', () => switchView(btn.dataset.back));
-  });
-
-  // Seçim Araçları
-  searchWordInput.addEventListener('input', (e) => {
-    renderWordList(filterStarredOnlyBtn.classList.contains('active'), e.target.value);
-  });
-
-  filterStarredOnlyBtn.addEventListener('click', () => {
-    filterStarredOnlyBtn.classList.toggle('active');
-    renderWordList(filterStarredOnlyBtn.classList.contains('active'), searchWordInput.value);
-  });
-
-  document.getElementById('selectAllBtn').addEventListener('click', () => {
-    getCurrentModuleWords().forEach(w => selectedWordIds.add(w.id));
-    renderWordList();
-  });
-
-  document.getElementById('clearSelectionBtn').addEventListener('click', () => {
-    selectedWordIds.clear();
-    renderWordList();
-  });
-
-  document.getElementById('selectQuick5Btn').addEventListener('click', () => {
-    const words = getCurrentModuleWords();
-    const shuffled = [...words].sort(() => Math.random() - 0.5).slice(0, 5);
-    shuffled.forEach(w => selectedWordIds.add(w.id));
-    renderWordList();
-  });
-
-  document.getElementById('selectQuick10Btn').addEventListener('click', () => {
-    const words = getCurrentModuleWords();
-    const shuffled = [...words].sort(() => Math.random() - 0.5).slice(0, 10);
-    shuffled.forEach(w => selectedWordIds.add(w.id));
-    renderWordList();
-  });
-
-  // Başlat Butonları
-  startCardsBtn.addEventListener('click', startFlashcardSession);
-  startMatchBtn.addEventListener('click', startMatchSession);
-  startQuizBtn.addEventListener('click', startQuizSession);
-
-  // Kart Butonları & Klavye
-  card3dWrap.addEventListener('click', flipCard);
-  btnCardFlip.addEventListener('click', flipCard);
-  btnCardKnown.addEventListener('click', nextCardKnown);
-  btnCardAgain.addEventListener('click', nextCardAgain);
-  cardStarBtn.addEventListener('click', () => {
-    const word = cardQueue[currentCardIndex];
-    toggleStarWord(word.id);
-    cardStarBtn.classList.toggle('active');
-  });
-
-  // Eşleştirme Butonları
-  btnResetMatch.addEventListener('click', startMatchSession);
-  btnRestartMatch.addEventListener('click', startMatchSession);
-
-  // Quiz Butonları
-  btnNextQuiz.addEventListener('click', () => {
-    currentQuizIndex++;
-    if (currentQuizIndex < quizQuestions.length) {
-      loadQuizQuestion();
-    } else {
-      alert(`Quiz Tamamlandı! Toplam Puanın: ${quizScore}`);
-      switchView('selectView');
-    }
-  });
-
-  // Klavye Kısayolları
-  document.addEventListener('keydown', (e) => {
-    if (views.cardView.classList.contains('active')) {
-      if (e.code === 'Space') { e.preventDefault(); flipCard(); }
-      else if (e.key === '1') { nextCardAgain(); }
-      else if (e.key === '2') { nextCardKnown(); }
-    }
-  });
+  toastMsg.textContent = msg;
+  toastIcon.className = type === 'error' ? 'fa-solid fa-circle-exclamation text-red-400 text-lg' : 'fa-solid fa-circle-check text-amber-400 text-lg';
+  toast.classList.remove('translate-y-20', 'opacity-0');
+  setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 2500);
 }
 
-// Uygulamayı Başlat
-document.addEventListener('DOMContentLoaded', initApp);
+mobileMenuBtn.addEventListener('click', () => sidebar.classList.toggle('-translate-x-full'));
+
+function renderAll() {
+  renderDeckList();
+  const deck = getActiveDeck();
+
+  if (!deck) {
+    emptyState.classList.remove('hidden');
+    deckView.classList.add('hidden');
+    return;
+  }
+
+  emptyState.classList.add('hidden');
+  deckView.classList.remove('hidden');
+  deckBadge.textContent = `${deck.cards.length} KELİME`;
+  deckTitle.textContent = deck.name;
+  renderCardTable();
+}
+
+// Başlat
+resetSelection();
+renderAll();
